@@ -2,13 +2,14 @@ name: Auto Stack Update
 
 on:
   schedule:
-    - cron: '30 0 * * *'
+    - cron: '0 0 * * 3'
   workflow_dispatch:
     inputs:
       stack:
         type: choice
         description: 'Stack to update'
         options:
+          - all
           - node
           - python
           - php
@@ -19,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        stack: ${{ github.event_name == 'workflow_dispatch' && fromJSON(format('["{0}"]', inputs.stack)) || fromJSON('["node","python","php","dotnet"]') }}
+        stack: ${{ github.event_name == 'workflow_dispatch' && inputs.stack != 'all' && fromJSON(format('["{0}"]', inputs.stack)) || fromJSON('["node","python","php","dotnet"]') }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -36,11 +37,16 @@ jobs:
         run: |
           python .github/auto-update/auto-update-stack.py --stack ${{ matrix.stack }}
 
+      - name: Get month name
+        id: month
+        run: echo "name=$(date +'%B %Y')" >> $GITHUB_OUTPUT
+
       - name: Create Pull Request
         if: steps.check.outputs.no_updates != 'true'
         uses: peter-evans/create-pull-request@v6
         with:
-          title: "[${{ matrix.stack }}] Update: ${{ steps.check.outputs.summary }}"
+          token: ${{ secrets.STACK_UPDATE_PAT }}
+          title: "[${{ steps.month.outputs.name }}][${{ matrix.stack }}] Update: ${{ steps.check.outputs.summary }}"
           branch: auto-update/${{ matrix.stack }}
           commit-message: "Update ${{ matrix.stack }} to latest upstream version"
           body: |
